@@ -1,5 +1,5 @@
 /**
- * HIVE Swarm Visualizer — server
+ * HIVE Swarm Visualizer, server
  *
  * How it works:
  *   1. Client opens a WebSocket and sends { action: "watch", mint: "<TOKEN_ADDRESS>" }.
@@ -14,7 +14,7 @@
  *   5. Parsed trades (buy / sell, sol amount, token amount, trader) are broadcast to all
  *      connected browser clients over WebSocket.
  *
- * Result: on an active pump.fun token doing 20–40 tx/s the feed stays in real time and
+ * Result: on an active pump.fun token doing 20,40 tx/s the feed stays in real time and
  * a Helius free tier lasts a lot longer than "one credit per tx".
  *
  * No secrets are baked in. The user provides RPC_URL via .env or environment.
@@ -60,7 +60,7 @@ const ENHANCED_URL = HELIUS_KEY
 
 if (!ENHANCED_URL) {
   console.warn("[HIVE] Warning: RPC_URL is not a Helius endpoint and HELIUS_API_KEY is not set.");
-  console.warn("       Falling back to per-tx getParsedTransaction — this will be slow and rate-limited.");
+  console.warn("       Falling back to per-tx getParsedTransaction, this will be slow and rate-limited.");
   console.warn("       For real-time speed use a Helius RPC URL (free tier is enough for casual use).\n");
 }
 
@@ -177,14 +177,14 @@ async function stopWatching(ws) {
 
 // ---------- signature intake ----------
 function onSignature(mint, signature, err) {
-  if (err) return; // failed tx — skip
+  if (err) return; // failed tx, skip
   const w = watchers.get(mint);
   if (!w) return;
   if (w.seen.has(signature)) return;
   w.seen.set(signature, Date.now());
 
   if (w.queue.length >= MAX_QUEUE) {
-    // drop oldest — protects memory on runaway tokens
+    // drop oldest, protects memory on runaway tokens
     w.queue.shift();
   }
   w.queue.push(signature);
@@ -214,7 +214,7 @@ setInterval(() => {
 // ---------- parsing ----------
 async function parseBatch(mint, signatures) {
   if (ENHANCED_URL) {
-    // Helius Enhanced — up to 100 txs per HTTP call
+    // Helius Enhanced, up to 100 txs per HTTP call
     let parsed;
     try {
       const r = await fetch(ENHANCED_URL, {
@@ -223,7 +223,7 @@ async function parseBatch(mint, signatures) {
         body: JSON.stringify({ transactions: signatures }),
       });
       if (!r.ok) {
-        // rate-limited or transient — requeue and back off
+        // rate-limited or transient, requeue and back off
         if (r.status === 429 || r.status >= 500) {
           const w = watchers.get(mint);
           if (w) w.queue.unshift(...signatures);
@@ -234,7 +234,7 @@ async function parseBatch(mint, signatures) {
       }
       parsed = await r.json();
     } catch (e) {
-      // network hiccup — requeue once and move on
+      // network hiccup, requeue once and move on
       const w = watchers.get(mint);
       if (w) w.queue.unshift(...signatures);
       throw e;

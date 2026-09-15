@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="assets/cover.png" alt="FLUX — Solana Trade Swarm" width="100%">
+  <img src="assets/cover.png" alt="FLUX, Solana Trade Swarm" width="100%">
 </p>
 
 <h1 align="center">FLUX</h1>
@@ -25,13 +25,13 @@
 
 FLUX is a self-hosted, real-time trade visualizer for Solana. Paste a token mint
 address, and every buy and every sell flows outward from a center hub across a
-canvas — green particles for buys, red for sells. A live feed on the right shows
+canvas, green particles for buys, red for sells. A live feed on the right shows
 the wallet, the amount, and a link to the transaction.
 
 It runs against your own Helius RPC endpoint. **No keys are bundled.** You install
 it, drop your own API key into a local `.env`, and the tool is yours.
 
-Built for pump.fun launches, Raydium pairs, Meteora pools, Jupiter routes — any
+Built for pump.fun launches, Raydium pairs, Meteora pools, Jupiter routes, any
 swap Helius can parse.
 
 ## What it does
@@ -127,7 +127,7 @@ The flow in words:
 
 ## Why the batch path
 
-The naive approach — one `getParsedTransaction` HTTP call per signature — falls
+The naive approach, one `getParsedTransaction` HTTP call per signature, falls
 apart on an active pump.fun token:
 
 - 10-40 tx/sec × 1 RPC credit per tx burns the Helius free tier in minutes.
@@ -139,7 +139,7 @@ reduction in credit spend and no per-tx round-trip latency.
 
 If your `RPC_URL` is not a Helius endpoint, the server falls back to
 `getParsedTransaction` with a small concurrency pool and rate-limit backoff, so
-it still works — just slower.
+it still works, just slower.
 
 ## Config
 
@@ -147,7 +147,7 @@ Everything is optional except `RPC_URL`. Set it in `.env` or as a shell variable
 
 | var                  | default | meaning                                                      |
 |----------------------|---------|--------------------------------------------------------------|
-| `RPC_URL`            | —       | required — your Helius (or any) RPC endpoint                 |
+| `RPC_URL`            |         | required, your Helius (or any) RPC endpoint                 |
 | `HELIUS_API_KEY`     | auto    | auto-derived from `RPC_URL`; override if using a proxy       |
 | `PORT`               | `3000`  | HTTP and WebSocket port                                      |
 | `BATCH_INTERVAL_MS`  | `350`   | how often to flush the signature queue                       |
@@ -160,7 +160,7 @@ Everything is optional except `RPC_URL`. Set it in `.env` or as a shell variable
 flux/
 ├── server.js                 // node server, batching, ws bridge
 ├── public/
-│   └── index.html            // canvas, feed, metrics — single file
+│   └── index.html            // canvas, feed, metrics, single file
 ├── assets/
 │   ├── cover.svg             // README hero
 │   └── cover.png             // rendered version for README

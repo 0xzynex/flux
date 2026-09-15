@@ -1,0 +1,21 @@
+{
+  "name": "flux-visualizer",
+  "version": "1.0.0",
+  "description": "Real-time Solana trade visualizer. Enter a token mint, watch every buy and sell flow across the canvas.",
+  "main": "server.js",
+  "type": "commonjs",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js"
+  },
+  "keywords": ["solana", "pumpfun", "visualizer", "trading", "helius"],
+  "license": "MIT",
+  "dependencies": {
+    "@solana/web3.js": "^1.95.3",
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2",
+    "node-fetch": "^2.7.0",
+    "ws": "^8.18.0"
+  },
+  "engines": { "node": ">=18" }
+}

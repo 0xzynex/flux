@@ -1,0 +1,498 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>FLUX — Solana Trade Visualizer</title>
+<style>
+  :root {
+    --bg: #08090b;
+    --bg-2: #0d0f13;
+    --panel: #0f1218;
+    --panel-2: #12161d;
+    --border: #1a1f28;
+    --border-2: #232a34;
+    --text: #e6ebf2;
+    --muted: #7a8493;
+    --dim: #4a525e;
+    --green: #2ee085;
+    --green-glow: rgba(46, 224, 133, 0.15);
+    --red: #ff5c6c;
+    --red-glow: rgba(255, 92, 108, 0.15);
+    --accent: #ffb547;
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; height: 100%; background: var(--bg); color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", Roboto, sans-serif;
+    font-size: 13px; -webkit-font-smoothing: antialiased;
+  }
+  .mono { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; }
+
+  #app { display: grid; grid-template-columns: 1fr 380px; grid-template-rows: 60px 1fr;
+    height: 100vh; overflow: hidden; }
+
+  /* ---------- header ---------- */
+  header {
+    grid-column: 1 / -1; display: flex; align-items: center; gap: 16px;
+    padding: 0 20px; background: var(--panel);
+    border-bottom: 1px solid var(--border);
+  }
+  .brand { display: flex; align-items: center; gap: 10px; padding-right: 16px;
+    border-right: 1px solid var(--border); height: 60px; }
+  .brand .mark { width: 22px; height: 22px; position: relative; }
+  .brand .mark::before, .brand .mark::after {
+    content: ""; position: absolute; inset: 0; border-radius: 50%;
+    background: radial-gradient(circle at 30% 30%, var(--accent), transparent 60%);
+    animation: pulse 2.4s ease-in-out infinite;
+  }
+  .brand .mark::after { animation-delay: 1.2s; opacity: 0.5; }
+  @keyframes pulse { 0%, 100% { transform: scale(0.7); opacity: 0.4; } 50% { transform: scale(1); opacity: 1; } }
+  .brand .name { font-weight: 700; letter-spacing: 4px; font-size: 15px; }
+
+  .input-wrap { flex: 1; position: relative; max-width: 720px; }
+  .input-wrap input {
+    width: 100%; background: var(--bg-2); border: 1px solid var(--border);
+    color: var(--text); padding: 10px 14px 10px 38px; border-radius: 8px;
+    font-family: ui-monospace, monospace; font-size: 12.5px; letter-spacing: 0.3px;
+    transition: border-color .15s, background .15s;
+  }
+  .input-wrap input::placeholder { color: var(--dim); }
+  .input-wrap input:focus { outline: none; border-color: var(--accent); background: var(--panel-2); }
+  .input-wrap::before {
+    content: ""; position: absolute; left: 14px; top: 50%; transform: translateY(-50%);
+    width: 14px; height: 14px; border: 1.5px solid var(--muted); border-radius: 50%;
+    border-top-color: transparent; opacity: 0.6;
+  }
+
+  .status-pill {
+    display: inline-flex; align-items: center; gap: 8px; padding: 6px 12px;
+    background: var(--bg-2); border: 1px solid var(--border); border-radius: 20px;
+    font-size: 11px; color: var(--muted); letter-spacing: 0.5px; text-transform: uppercase;
+    white-space: nowrap;
+  }
+  .status-pill .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--dim); box-shadow: 0 0 0 0 currentColor; }
+  .status-pill.ok { color: var(--green); border-color: rgba(46, 224, 133, 0.25); }
+  .status-pill.ok .dot { background: var(--green); animation: ping 2s ease-out infinite; }
+  .status-pill.err { color: var(--red); border-color: rgba(255, 92, 108, 0.25); }
+  .status-pill.err .dot { background: var(--red); }
+  @keyframes ping { 0% { box-shadow: 0 0 0 0 var(--green-glow); } 100% { box-shadow: 0 0 0 10px transparent; } }
+
+  /* ---------- canvas area ---------- */
+  #stage { position: relative; overflow: hidden; background:
+    radial-gradient(ellipse 80% 60% at center, #101319 0%, #08090b 70%); }
+  #canvas { display: block; width: 100%; height: 100%; }
+  #stage::before {
+    content: ""; position: absolute; inset: 0; pointer-events: none;
+    background-image:
+      linear-gradient(rgba(255,255,255,0.015) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255,255,255,0.015) 1px, transparent 1px);
+    background-size: 40px 40px;
+  }
+  .stage-overlay {
+    position: absolute; left: 20px; bottom: 20px; display: flex; gap: 20px;
+    color: var(--muted); font-size: 11px; letter-spacing: 0.5px; text-transform: uppercase;
+    pointer-events: none;
+  }
+  .stage-overlay .legend { display: flex; align-items: center; gap: 6px; }
+  .stage-overlay .legend .swatch { width: 8px; height: 8px; border-radius: 50%; }
+  .stage-overlay .legend .swatch.buy { background: var(--green); box-shadow: 0 0 8px var(--green); }
+  .stage-overlay .legend .swatch.sell { background: var(--red); box-shadow: 0 0 8px var(--red); }
+
+  .empty-hint {
+    position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+    color: var(--dim); font-size: 14px; letter-spacing: 2px; text-transform: uppercase;
+    pointer-events: none;
+  }
+  .empty-hint.hidden { display: none; }
+
+  /* ---------- sidebar ---------- */
+  #side { border-left: 1px solid var(--border); background: var(--panel);
+    display: flex; flex-direction: column; overflow: hidden; }
+
+  .token-bar {
+    padding: 14px 16px; border-bottom: 1px solid var(--border);
+    display: flex; flex-direction: column; gap: 4px;
+  }
+  .token-bar .lbl { color: var(--muted); font-size: 10px; letter-spacing: 1.5px; text-transform: uppercase; }
+  .token-bar .addr { font-family: ui-monospace, monospace; font-size: 12px; color: var(--text);
+    display: flex; align-items: center; gap: 8px; cursor: pointer; }
+  .token-bar .addr:hover { color: var(--accent); }
+  .token-bar .addr .copy { font-size: 10px; color: var(--dim); }
+  .token-bar .addr.empty { color: var(--dim); }
+
+  /* metrics grid */
+  #metrics { display: grid; grid-template-columns: 1fr 1fr; }
+  #metrics .m {
+    padding: 12px 16px; border-bottom: 1px solid var(--border);
+    border-right: 1px solid var(--border);
+  }
+  #metrics .m:nth-child(even) { border-right: none; }
+  #metrics .m .lbl { color: var(--muted); font-size: 10px; letter-spacing: 1.5px;
+    text-transform: uppercase; margin-bottom: 4px; }
+  #metrics .m .val { font-size: 18px; font-family: ui-monospace, monospace; font-weight: 500; }
+  #metrics .m.buy .val { color: var(--green); }
+  #metrics .m.sell .val { color: var(--red); }
+
+  /* pressure bar */
+  .pressure {
+    padding: 12px 16px; border-bottom: 1px solid var(--border);
+  }
+  .pressure .head { display: flex; justify-content: space-between; margin-bottom: 8px;
+    font-size: 10px; letter-spacing: 1.5px; text-transform: uppercase; color: var(--muted); }
+  .pressure .bar { height: 6px; border-radius: 3px; background: var(--bg-2); overflow: hidden;
+    display: flex; }
+  .pressure .bar .b { background: linear-gradient(90deg, var(--green), #4af0a5); transition: width .4s ease; }
+  .pressure .bar .s { background: linear-gradient(90deg, #ff8a95, var(--red)); transition: width .4s ease; margin-left: auto; }
+  .pressure .head span.b { color: var(--green); }
+  .pressure .head span.s { color: var(--red); }
+
+  /* volume bars */
+  .volblock { padding: 12px 16px; border-bottom: 1px solid var(--border); }
+  .volblock .lbl { color: var(--muted); font-size: 10px; letter-spacing: 1.5px;
+    text-transform: uppercase; margin-bottom: 8px; }
+  #volbars { display: flex; gap: 2px; height: 56px; align-items: center; }
+  #volbars .bar { flex: 1; height: 100%; position: relative; display: flex; flex-direction: column;
+    justify-content: center; }
+  #volbars .bar .buy, #volbars .bar .sell { width: 100%; min-height: 1px; transition: height .3s; }
+  #volbars .bar .buy { background: var(--green); border-radius: 2px 2px 0 0; }
+  #volbars .bar .sell { background: var(--red); border-radius: 0 0 2px 2px; margin-top: 1px; }
+
+  /* feed */
+  .feed-head { padding: 10px 16px; border-bottom: 1px solid var(--border);
+    color: var(--muted); font-size: 10px; letter-spacing: 1.5px; text-transform: uppercase;
+    display: flex; justify-content: space-between; align-items: center; }
+  .feed-head .count { color: var(--text); }
+  #feed { flex: 1; overflow-y: auto; scrollbar-width: thin;
+    scrollbar-color: var(--border-2) transparent; }
+  #feed::-webkit-scrollbar { width: 6px; }
+  #feed::-webkit-scrollbar-thumb { background: var(--border-2); border-radius: 3px; }
+  #feed .row {
+    display: grid; grid-template-columns: 48px 1fr auto; gap: 10px;
+    padding: 9px 16px 9px 12px; border-bottom: 1px solid #14181f;
+    align-items: center; position: relative;
+    animation: slideIn .25s ease-out;
+  }
+  @keyframes slideIn { from { opacity: 0; transform: translateX(-8px); } to { opacity: 1; transform: none; } }
+  #feed .row::before {
+    content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 3px;
+  }
+  #feed .row.buy::before { background: var(--green); }
+  #feed .row.sell::before { background: var(--red); }
+  #feed .row .side { font-size: 10px; font-weight: 700; letter-spacing: 1px; }
+  #feed .row.buy .side { color: var(--green); }
+  #feed .row.sell .side { color: var(--red); }
+  #feed .row .addr { font-family: ui-monospace, monospace; font-size: 11.5px;
+    color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  #feed .row .addr a { color: inherit; text-decoration: none; }
+  #feed .row .addr a:hover { color: var(--accent); }
+  #feed .row .amt { font-family: ui-monospace, monospace; font-size: 12px; text-align: right;
+    white-space: nowrap; }
+  #feed .row .amt .sol { color: var(--muted); font-size: 10px; margin-left: 3px; }
+
+  .feed-empty { padding: 40px 20px; text-align: center; color: var(--dim); font-size: 12px; }
+
+  .toast {
+    position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%);
+    background: var(--panel-2); border: 1px solid var(--border-2); color: var(--text);
+    padding: 10px 16px; border-radius: 8px; font-size: 12px; z-index: 100;
+    opacity: 0; transition: opacity .2s;
+  }
+  .toast.show { opacity: 1; }
+</style>
+</head>
+<body>
+<div id="app">
+  <header>
+    <div class="brand">
+      <div class="mark"></div>
+      <div class="name">FLUX</div>
+    </div>
+    <div class="input-wrap">
+      <input id="mint" placeholder="paste a Solana token mint address and press Enter" autocomplete="off" spellcheck="false" />
+    </div>
+    <div class="status-pill" id="status">
+      <div class="dot"></div>
+      <span id="status-text">connecting</span>
+    </div>
+  </header>
+
+  <div id="stage">
+    <canvas id="canvas"></canvas>
+    <div class="empty-hint" id="hint">enter a mint to begin</div>
+    <div class="stage-overlay">
+      <div class="legend"><div class="swatch buy"></div>buy</div>
+      <div class="legend"><div class="swatch sell"></div>sell</div>
+    </div>
+  </div>
+
+  <aside id="side">
+    <div class="token-bar">
+      <div class="lbl">token</div>
+      <div class="addr empty" id="tokenAddr">no token watched</div>
+    </div>
+
+    <div id="metrics">
+      <div class="m buy"><div class="lbl">buys</div><div class="val" id="mBuys">0</div></div>
+      <div class="m sell"><div class="lbl">sells</div><div class="val" id="mSells">0</div></div>
+      <div class="m buy"><div class="lbl">buy vol</div><div class="val" id="mBuySol">0.00</div></div>
+      <div class="m sell"><div class="lbl">sell vol</div><div class="val" id="mSellSol">0.00</div></div>
+      <div class="m"><div class="lbl">net flow</div><div class="val" id="mNet">0.00</div></div>
+      <div class="m"><div class="lbl">avg size</div><div class="val" id="mAvg">0.00</div></div>
+    </div>
+
+    <div class="pressure">
+      <div class="head">
+        <span class="b" id="pB">50%</span>
+        <span>buy pressure</span>
+        <span class="s" id="pS">50%</span>
+      </div>
+      <div class="bar">
+        <div class="b" id="pBarB" style="width:50%"></div>
+        <div class="s" id="pBarS" style="width:50%"></div>
+      </div>
+    </div>
+
+    <div class="volblock">
+      <div class="lbl">volume — last 30s</div>
+      <div id="volbars"></div>
+    </div>
+
+    <div class="feed-head">
+      <span>live feed</span>
+      <span class="count" id="feedCount">0</span>
+    </div>
+    <div id="feed"><div class="feed-empty">no trades yet</div></div>
+  </aside>
+</div>
+
+<div class="toast" id="toast">copied</div>
+
+<script>
+(() => {
+  const canvas = document.getElementById("canvas");
+  const ctx = canvas.getContext("2d");
+  const feed = document.getElementById("feed");
+  const statusEl = document.getElementById("status");
+  const statusTxt = document.getElementById("status-text");
+  const mintInput = document.getElementById("mint");
+  const hint = document.getElementById("hint");
+  const tokenAddr = document.getElementById("tokenAddr");
+  const toast = document.getElementById("toast");
+
+  const BARS = 30;
+  const volBars = Array.from({ length: BARS }, () => ({ buy: 0, sell: 0 }));
+  const volEl = document.getElementById("volbars");
+  for (let i = 0; i < BARS; i++) {
+    const b = document.createElement("div");
+    b.className = "bar";
+    b.innerHTML = '<div class="buy"></div><div class="sell"></div>';
+    volEl.appendChild(b);
+  }
+
+  let particles = [];
+  let ripples = [];
+  let stats = { buys: 0, sells: 0, buySol: 0, sellSol: 0, count: 0 };
+  let ws = null;
+
+  function fit() {
+    const dpr = window.devicePixelRatio || 1;
+    canvas.width = canvas.clientWidth * dpr;
+    canvas.height = canvas.clientHeight * dpr;
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  }
+  window.addEventListener("resize", fit); fit();
+
+  function setStatus(txt, cls) {
+    statusTxt.textContent = txt;
+    statusEl.className = "status-pill" + (cls ? " " + cls : "");
+  }
+  function showToast(msg) {
+    toast.textContent = msg;
+    toast.classList.add("show");
+    setTimeout(() => toast.classList.remove("show"), 1200);
+  }
+
+  function connect() {
+    const proto = location.protocol === "https:" ? "wss:" : "ws:";
+    ws = new WebSocket(proto + "//" + location.host);
+    ws.onopen = () => setStatus("connected", "ok");
+    ws.onclose = () => { setStatus("reconnecting", "err"); setTimeout(connect, 1500); };
+    ws.onerror = () => setStatus("error", "err");
+    ws.onmessage = (e) => {
+      const msg = JSON.parse(e.data);
+      if (msg.type === "trade") onTrade(msg);
+      else if (msg.type === "watching") {
+        setStatus("watching · " + short(msg.mint), "ok");
+        tokenAddr.classList.remove("empty");
+        tokenAddr.dataset.full = msg.mint;
+        tokenAddr.innerHTML = `<span>${short(msg.mint, 6)}</span><span class="copy">click to copy</span>`;
+      } else if (msg.type === "error") setStatus(msg.message, "err");
+    };
+  }
+  connect();
+
+  tokenAddr.addEventListener("click", () => {
+    const full = tokenAddr.dataset.full;
+    if (!full) return;
+    navigator.clipboard.writeText(full).then(() => showToast("address copied"));
+  });
+
+  mintInput.addEventListener("keydown", (e) => {
+    if (e.key !== "Enter") return;
+    const mint = mintInput.value.trim();
+    if (!mint) return;
+    particles = []; ripples = [];
+    stats = { buys: 0, sells: 0, buySol: 0, sellSol: 0, count: 0 };
+    feed.innerHTML = ""; hint.classList.add("hidden");
+    volBars.forEach(v => { v.buy = 0; v.sell = 0; });
+    updateMetrics();
+    ws.send(JSON.stringify({ action: "watch", mint }));
+    setStatus("subscribing…");
+  });
+
+  function onTrade(t) {
+    const w = canvas.clientWidth, h = canvas.clientHeight;
+    const cx = w / 2, cy = h / 2;
+    // size scales with sol amount (log)
+    const size = Math.min(14, 3 + Math.log10(1 + t.solAmount * 100) * 2.5);
+    // spawn near center with outward velocity, angle random
+    const angle = Math.random() * Math.PI * 2;
+    const speed = 1.5 + Math.random() * 2;
+    particles.push({
+      x: cx + Math.cos(angle) * 20,
+      y: cy + Math.sin(angle) * 20,
+      vx: Math.cos(angle) * speed,
+      vy: Math.sin(angle) * speed,
+      life: 1, size, side: t.side,
+    });
+    if (particles.length > 300) particles.splice(0, particles.length - 300);
+    ripples.push({ x: cx, y: cy, r: 15, life: 1, side: t.side });
+    if (ripples.length > 20) ripples.shift();
+
+    // stats
+    if (t.side === "buy") { stats.buys++; stats.buySol += t.solAmount; }
+    else { stats.sells++; stats.sellSol += t.solAmount; }
+    stats.count++;
+    updateMetrics();
+
+    // volume bars
+    const b = volBars[volBars.length - 1];
+    if (t.side === "buy") b.buy += t.solAmount; else b.sell += t.solAmount;
+
+    // feed
+    const feedEmpty = feed.querySelector(".feed-empty");
+    if (feedEmpty) feedEmpty.remove();
+    const row = document.createElement("div");
+    row.className = "row " + t.side;
+    row.innerHTML = `
+      <div class="side">${t.side === "buy" ? "BUY" : "SELL"}</div>
+      <div class="addr"><a href="https://solscan.io/tx/${t.signature}" target="_blank">${short(t.trader)}</a></div>
+      <div class="amt">${t.solAmount.toFixed(3)}<span class="sol">SOL</span></div>`;
+    feed.insertBefore(row, feed.firstChild);
+    while (feed.children.length > 150) feed.removeChild(feed.lastChild);
+  }
+
+  function updateMetrics() {
+    document.getElementById("mBuys").textContent = stats.buys;
+    document.getElementById("mSells").textContent = stats.sells;
+    document.getElementById("mBuySol").textContent = stats.buySol.toFixed(2);
+    document.getElementById("mSellSol").textContent = stats.sellSol.toFixed(2);
+    const net = stats.buySol - stats.sellSol;
+    const netEl = document.getElementById("mNet");
+    netEl.textContent = (net >= 0 ? "+" : "") + net.toFixed(2);
+    netEl.style.color = net >= 0 ? "var(--green)" : "var(--red)";
+    const avg = stats.count ? (stats.buySol + stats.sellSol) / stats.count : 0;
+    document.getElementById("mAvg").textContent = avg.toFixed(3);
+    document.getElementById("feedCount").textContent = stats.count;
+
+    const total = stats.buySol + stats.sellSol;
+    const bPct = total > 0 ? (stats.buySol / total) * 100 : 50;
+    const sPct = 100 - bPct;
+    document.getElementById("pB").textContent = bPct.toFixed(0) + "%";
+    document.getElementById("pS").textContent = sPct.toFixed(0) + "%";
+    document.getElementById("pBarB").style.width = bPct + "%";
+    document.getElementById("pBarS").style.width = sPct + "%";
+  }
+
+  // rotate volume bars once per second
+  setInterval(() => {
+    volBars.shift(); volBars.push({ buy: 0, sell: 0 });
+    const max = Math.max(0.001, ...volBars.map(v => v.buy + v.sell));
+    for (let i = 0; i < BARS; i++) {
+      const el = volEl.children[i];
+      const bh = (volBars[i].buy / max) * 50;
+      const sh = (volBars[i].sell / max) * 50;
+      el.querySelector(".buy").style.height = bh + "%";
+      el.querySelector(".sell").style.height = sh + "%";
+    }
+  }, 1000);
+
+  function short(s, n = 4) { return s ? s.slice(0, n) + "…" + s.slice(-n) : ""; }
+
+  // animation loop
+  function frame() {
+    const w = canvas.clientWidth, h = canvas.clientHeight;
+    // gentle fade for soft trails
+    ctx.fillStyle = "rgba(8,9,11,0.18)";
+    ctx.fillRect(0, 0, w, h);
+
+    // center hub
+    const cx = w / 2, cy = h / 2;
+    const hubR = 4 + Math.sin(performance.now() / 500) * 1.5;
+    ctx.beginPath();
+    ctx.fillStyle = "rgba(255, 181, 71, 0.9)";
+    ctx.arc(cx, cy, hubR, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.strokeStyle = "rgba(255, 181, 71, 0.2)";
+    ctx.lineWidth = 1;
+    ctx.arc(cx, cy, 14, 0, Math.PI * 2);
+    ctx.stroke();
+
+    // ripples
+    for (const r of ripples) {
+      const c = r.side === "buy" ? "46,224,133" : "255,92,108";
+      ctx.beginPath();
+      ctx.strokeStyle = `rgba(${c},${r.life * 0.5})`;
+      ctx.lineWidth = 1.5;
+      ctx.arc(r.x, r.y, r.r, 0, Math.PI * 2);
+      ctx.stroke();
+      r.r += 3;
+      r.life -= 0.02;
+    }
+    ripples = ripples.filter(r => r.life > 0);
+
+    // particles
+    for (const p of particles) {
+      // slight drift and drag
+      p.vx *= 0.995; p.vy *= 0.995;
+      p.vx += (Math.random() - 0.5) * 0.1;
+      p.vy += (Math.random() - 0.5) * 0.1;
+      p.x += p.vx; p.y += p.vy;
+      p.life -= 0.006;
+
+      const c = p.side === "buy" ? "46,224,133" : "255,92,108";
+      // glow
+      const grad = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, p.size * 3);
+      grad.addColorStop(0, `rgba(${c},${p.life * 0.6})`);
+      grad.addColorStop(1, `rgba(${c},0)`);
+      ctx.fillStyle = grad;
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, p.size * 3, 0, Math.PI * 2);
+      ctx.fill();
+      // core
+      ctx.beginPath();
+      ctx.fillStyle = `rgba(${c},${Math.min(1, p.life * 1.2)})`;
+      ctx.arc(p.x, p.y, p.size * 0.5, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    particles = particles.filter(p => p.life > 0 && p.x > -50 && p.x < w + 50 && p.y > -50 && p.y < h + 50);
+
+    requestAnimationFrame(frame);
+  }
+  requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>
